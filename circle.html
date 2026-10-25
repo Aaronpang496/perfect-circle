@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Perfect Circle</title>
+<title>Perfect Shape</title>
 <style>
   * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
   body { margin: 0; background: #0f172a; color: white; overflow: hidden; font-family: system-ui, sans-serif; touch-action: none; }
@@ -12,10 +12,19 @@
   #ui {
     position: absolute; top: 20px; left: 0; width: 100%;
     text-align: center; pointer-events: none;
+    display: flex; flex-direction: column; align-items: center;
   }
   h1 { margin: 0; font-size: 20px; color: #94a3b8; letter-spacing: 2px; }
-  #score-display { font-size: 48px; font-weight: bold; margin: 10px 0; color: #facc15; }
-  #best-display { font-size: 16px; color: #cbd5e1; }
+  #score-display { font-size: 48px; font-weight: bold; margin: 5px 0; color: #facc15; }
+  #best-display { font-size: 16px; color: #cbd5e1; margin-bottom: 15px; }
+  
+  #menu { display: flex; gap: 10px; pointer-events: auto; }
+  #menu button {
+    padding: 10px 20px; font-size: 16px; font-weight: bold;
+    background: #1e293b; color: white; border: 2px solid #475569;
+    border-radius: 8px; cursor: pointer; transition: 0.2s;
+  }
+  #menu button.active { background: #facc15; color: #0f172a; border-color: #facc15; }
   
   #message {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -27,9 +36,15 @@
 <body>
 
 <div id="ui">
-  <h1>DRAW A PERFECT CIRCLE</h1>
+  <h1>DRAW A PERFECT SHAPE</h1>
   <div id="score-display">0.00%</div>
   <div id="best-display">Best: 0.00%</div>
+  
+  <div id="menu">
+    <button id="btn-circle" class="active" onclick="setShape('circle')">Circle</button>
+    <button id="btn-square" onclick="setShape('square')">Square</button>
+    <button id="btn-triangle" onclick="setShape('triangle')">Triangle</button>
+  </div>
 </div>
 
 <div id="message"></div>
@@ -41,6 +56,11 @@
   const scoreDisplay = document.getElementById('score-display');
   const bestDisplay = document.getElementById('best-display');
   const message = document.getElementById('message');
+  const buttons = {
+    circle: document.getElementById('btn-circle'),
+    square: document.getElementById('btn-square'),
+    triangle: document.getElementById('btn-triangle')
+  };
 
   let width, height;
   function resize() {
@@ -50,9 +70,23 @@
   window.addEventListener('resize', resize);
   resize();
 
+  let currentShape = 'circle';
+  let bestScores = { circle: 0, square: 0, triangle: 0 };
   let isDrawing = false;
   let points = [];
-  let bestScore = 0;
+
+  // --- SHAPE SELECTION ---
+  function setShape(shape) {
+    currentShape = shape;
+    Object.values(buttons).forEach(b => b.classList.remove('active'));
+    buttons[shape].classList.add('active');
+    
+    scoreDisplay.textContent = "0.00%";
+    bestDisplay.textContent = `Best: ${bestScores[shape].toFixed(2)}%`;
+    message.style.opacity = 0;
+    points = [];
+    ctx.clearRect(0, 0, width, height);
+  }
 
   // --- MOUSE / TOUCH EVENTS ---
   canvas.addEventListener('pointerdown', (e) => {
@@ -76,47 +110,86 @@
 
   // --- MATH: CALCULATE PERFECTION ---
   function calculateScore() {
-    if (points.length < 15) return; // Too short to be a circle
+    if (points.length < 20) return;
 
-    // 1. Find the center of the circle (average of all points)
-    let sumX = 0, sumY = 0;
-    for (let p of points) { sumX += p.x; sumY += p.y; }
-    const cx = sumX / points.length;
-    const cy = sumY / points.length;
+    let score = 0;
 
-    // 2. Find the average radius
-    let sumRadius = 0;
-    for (let p of points) {
-      sumRadius += Math.hypot(p.x - cx, p.y - cy);
+    if (currentShape === 'circle') {
+      score = calculateCircle();
+    } else if (currentShape === 'square') {
+      score = calculatePolygon(4);
+    } else if (currentShape === 'triangle') {
+      score = calculatePolygon(3);
     }
-    const avgRadius = sumRadius / points.length;
-
-    // 3. Calculate the error (how much each point deviates from the perfect radius)
-    let totalError = 0;
-    for (let p of points) {
-      const distance = Math.hypot(p.x - cx, p.y - cy);
-      totalError += Math.abs(distance - avgRadius);
-    }
-
-    // 4. Calculate final score (0% to 100%)
-    const avgError = totalError / points.length;
-    const errorRatio = avgError / avgRadius; // 0 is perfect
-    let score = Math.max(0, 100 - (errorRatio * 100 * 2.5)); // The 2.5 makes it harder to get 100%
 
     scoreDisplay.textContent = score.toFixed(2) + "%";
 
-    // 5. Check if it's a new best score
-    if (score > bestScore) {
-      bestScore = score;
-      bestDisplay.textContent = `Best: ${bestScore.toFixed(2)}%`;
+    if (score > bestScores[currentShape]) {
+      bestScores[currentShape] = score;
+      bestDisplay.textContent = `Best: ${bestScores[currentShape].toFixed(2)}%`;
       showMessage("NEW BEST!", "#22c55e");
-    } else if (score > 90) {
-      showMessage("Amazing!", "#facc15");
-    } else if (score < 40) {
+    } else if (score > 85) {
+      showMessage("Wow, are you a robot?", "#facc15");
+    } else if (score < 30) {
       showMessage("Are you even trying?", "#ef4444");
+    } else if (currentShape !== 'circle' && points.length < 50) {
+      showMessage("You didn't close the shape!", "#ef4444");
     } else {
       showMessage("Not bad.", "#94a3b8");
     }
+  }
+
+  // 1. CIRCLE MATH
+  function calculateCircle() {
+    let sumX = 0, sumY = 0;
+    for (let p of points) { sumX += p.x; sumY += p.y; }
+    const cx = sumX / points.length, cy = sumY / points.length;
+
+    let sumRadius = 0;
+    for (let p of points) sumRadius += Math.hypot(p.x - cx, p.y - cy);
+    const avgRadius = sumRadius / points.length;
+
+    let totalError = 0;
+    for (let p of points) totalError += Math.abs(Math.hypot(p.x - cx, p.y - cy) - avgRadius);
+
+    const errorRatio = (totalError / points.length) / avgRadius;
+    return Math.max(0, 100 - (errorRatio * 100 * 2.5));
+  }
+
+  // 2. SQUARE & TRIANGLE MATH
+  function calculatePolygon(sides) {
+    // Find Center
+    let sumX = 0, sumY = 0;
+    for (let p of points) { sumX += p.x; sumY += p.y; }
+    const cx = sumX / points.length, cy = sumY / points.length;
+
+    // Check if the user closed the shape (distance from start to end)
+    const distStartEnd = Math.hypot(points[0].x - points[points.length-1].x, points[0].y - points[points.length-1].y);
+    if (distStartEnd > 50) return 10; // Huge penalty if not closed
+
+    // Find Average Radius
+    let sumRadius = 0;
+    for (let p of points) sumRadius += Math.hypot(p.x - cx, p.y - cy);
+    const avgRadius = sumRadius / points.length;
+
+    // Calculate angles from center to check for corners
+    let angles = [];
+    for (let p of points) {
+      let angle = Math.atan2(p.y - cy, p.x - cx) + Math.PI; // Normalize to 0 - 2PI
+      if (angles.length === 0 || Math.abs(angle - angles[angles.length-1]) > 0.05) {
+        angles.push(angle);
+      }
+    }
+
+    // Calculate Error (How much it deviates from perfect radius)
+    let totalError = 0;
+    for (let p of points) totalError += Math.abs(Math.hypot(p.x - cx, p.y - cy) - avgRadius);
+    const errorRatio = (totalError / points.length) / avgRadius;
+    
+    // For a perfect polygon, the distance from center to corners is bigger than to the edges.
+    // This is a simplified check: We just measure radius deviation and angle variation.
+    let baseScore = Math.max(0, 100 - (errorRatio * 100 * 1.5)); // 1.5 multiplier makes it slightly more forgiving than a circle
+    return baseScore;
   }
 
   function showMessage(text, color) {
@@ -128,22 +201,18 @@
   // --- DRAWING ---
   function draw() {
     ctx.clearRect(0, 0, width, height);
-
     if (points.length < 2) return;
 
     ctx.beginPath();
     ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) {
-      ctx.lineTo(points[i].x, points[i].y);
-    }
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
     
-    ctx.strokeStyle = '#facc15'; // Yellow line
+    ctx.strokeStyle = '#facc15';
     ctx.lineWidth = 5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.stroke();
   }
-
 </script>
 </body>
 </html>
