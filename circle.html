@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Perfect Circle</title>
+<style>
+  * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+  body { margin: 0; background: #0f172a; color: white; overflow: hidden; font-family: system-ui, sans-serif; touch-action: none; }
+  canvas { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+  
+  #ui {
+    position: absolute; top: 20px; left: 0; width: 100%;
+    text-align: center; pointer-events: none;
+  }
+  h1 { margin: 0; font-size: 20px; color: #94a3b8; letter-spacing: 2px; }
+  #score-display { font-size: 48px; font-weight: bold; margin: 10px 0; color: #facc15; }
+  #best-display { font-size: 16px; color: #cbd5e1; }
+  
+  #message {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 24px; font-weight: bold; text-align: center; pointer-events: none;
+    opacity: 0; transition: opacity 0.3s; text-shadow: 0 4px 10px rgba(0,0,0,0.8);
+  }
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <h1>DRAW A PERFECT CIRCLE</h1>
+  <div id="score-display">0.00%</div>
+  <div id="best-display">Best: 0.00%</div>
+</div>
+
+<div id="message"></div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const scoreDisplay = document.getElementById('score-display');
+  const bestDisplay = document.getElementById('best-display');
+  const message = document.getElementById('message');
+
+  let width, height;
+  function resize() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  let isDrawing = false;
+  let points = [];
+  let bestScore = 0;
+
+  // --- MOUSE / TOUCH EVENTS ---
+  canvas.addEventListener('pointerdown', (e) => {
+    isDrawing = true;
+    points = [{ x: e.clientX, y: e.clientY }];
+    scoreDisplay.textContent = "0.00%";
+    message.style.opacity = 0;
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (!isDrawing) return;
+    points.push({ x: e.clientX, y: e.clientY });
+    draw();
+  });
+
+  canvas.addEventListener('pointerup', () => {
+    if (!isDrawing) return;
+    isDrawing = false;
+    calculateScore();
+  });
+
+  // --- MATH: CALCULATE PERFECTION ---
+  function calculateScore() {
+    if (points.length < 15) return; // Too short to be a circle
+
+    // 1. Find the center of the circle (average of all points)
+    let sumX = 0, sumY = 0;
+    for (let p of points) { sumX += p.x; sumY += p.y; }
+    const cx = sumX / points.length;
+    const cy = sumY / points.length;
+
+    // 2. Find the average radius
+    let sumRadius = 0;
+    for (let p of points) {
+      sumRadius += Math.hypot(p.x - cx, p.y - cy);
+    }
+    const avgRadius = sumRadius / points.length;
+
+    // 3. Calculate the error (how much each point deviates from the perfect radius)
+    let totalError = 0;
+    for (let p of points) {
+      const distance = Math.hypot(p.x - cx, p.y - cy);
+      totalError += Math.abs(distance - avgRadius);
+    }
+
+    // 4. Calculate final score (0% to 100%)
+    const avgError = totalError / points.length;
+    const errorRatio = avgError / avgRadius; // 0 is perfect
+    let score = Math.max(0, 100 - (errorRatio * 100 * 2.5)); // The 2.5 makes it harder to get 100%
+
+    scoreDisplay.textContent = score.toFixed(2) + "%";
+
+    // 5. Check if it's a new best score
+    if (score > bestScore) {
+      bestScore = score;
+      bestDisplay.textContent = `Best: ${bestScore.toFixed(2)}%`;
+      showMessage("NEW BEST!", "#22c55e");
+    } else if (score > 90) {
+      showMessage("Amazing!", "#facc15");
+    } else if (score < 40) {
+      showMessage("Are you even trying?", "#ef4444");
+    } else {
+      showMessage("Not bad.", "#94a3b8");
+    }
+  }
+
+  function showMessage(text, color) {
+    message.textContent = text;
+    message.style.color = color;
+    message.style.opacity = 1;
+  }
+
+  // --- DRAWING ---
+  function draw() {
+    ctx.clearRect(0, 0, width, height);
+
+    if (points.length < 2) return;
+
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+      ctx.lineTo(points[i].x, points[i].y);
+    }
+    
+    ctx.strokeStyle = '#facc15'; // Yellow line
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+  }
+
+</script>
+</body>
+</html>
